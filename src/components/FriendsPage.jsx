@@ -3,7 +3,7 @@
 // Wire addFriend / declineRequest to contract calls when ready.
 
 import { useState } from "react";
-import { short, initial, Modal } from "./constants.js";
+import { short, initial, Modal } from "../Constants.jsx";
 
 // ─── Add Friend Modal ─────────────────────────────────────────────────────────
 function AddFriendModal({ onClose, onAdd }) {

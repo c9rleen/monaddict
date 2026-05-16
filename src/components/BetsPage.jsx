@@ -3,7 +3,7 @@
 // Wire createBet / acceptBet / settleBet to contract calls when ready.
 
 import { useState } from "react";
-import { ensName, Modal } from "./constants.js";
+import { ensName, Modal } from "../Constants.jsx";
 
 // ─── Create Bet Modal ─────────────────────────────────────────────────────────
 function CreateBetModal({ onClose, onCreate, state, preGoalId }) {
