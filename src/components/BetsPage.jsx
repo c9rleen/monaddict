@@ -11,12 +11,14 @@ function CreateBetModal({ onClose, onCreate, state, preGoalId }) {
   const [amount,    setAmount]    = useState("");
   const [condition, setCondition] = useState("");
   const [goalId,    setGoalId]    = useState(preGoalId || "");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const canSubmit = against && amount && condition.trim();
+  const canSubmit = against && Number(amount) > 0 && condition.trim() && !isSubmitting;
 
-  function submit() {
+  async function submit() {
     if (!canSubmit) return;
-    onCreate({
+    setIsSubmitting(true);
+    const created = await onCreate({
       groupId:
         state.goals.find((g) => g.id === goalId)?.groupId ||
         state.groups[0]?.id,
@@ -29,6 +31,8 @@ function CreateBetModal({ onClose, onCreate, state, preGoalId }) {
       creatorWins: "goal achieved",
       againstWins: "goal missed",
     });
+    setIsSubmitting(false);
+    if (created) onClose();
   }
 
   return (
@@ -38,7 +42,7 @@ function CreateBetModal({ onClose, onCreate, state, preGoalId }) {
       footer={
         <>
           <button className="btn btn-rose" disabled={!canSubmit} onClick={submit}>
-            Propose Bet
+            {isSubmitting ? "Confirming..." : "Propose Bet"}
           </button>
           <button className="btn btn-ghost" onClick={onClose}>
             Cancel
@@ -126,7 +130,7 @@ function CreateBetModal({ onClose, onCreate, state, preGoalId }) {
 }
 
 // ─── Bet Card ─────────────────────────────────────────────────────────────────
-function BetCard({ bet, account, friends, onAccept, onSettle }) {
+function BetCard({ bet, account, friends, onAccept, onSettle, pendingAction }) {
   const isMine       = bet.creator === account;
   const counterparty = isMine
     ? ensName(bet.against, friends)
@@ -157,10 +161,13 @@ function BetCard({ bet, account, friends, onAccept, onSettle }) {
             {bet.winner && (
               <div style={{ marginTop: 8 }}>
                 <span className="tag tag-sage">
-                  🏆 Winner: {ensName(bet.winner, friends)}
+                  Winner: {ensName(bet.winner, friends)}
                 </span>
               </div>
             )}
+            <TxHash label="Proposed" hash={bet.txHash} />
+            <TxHash label="Accepted" hash={bet.acceptTxHash} />
+            <TxHash label="Settled" hash={bet.settleTxHash} />
           </div>
 
           {/* Right: status + actions */}
@@ -179,8 +186,9 @@ function BetCard({ bet, account, friends, onAccept, onSettle }) {
               <button
                 className="btn btn-amber btn-sm"
                 onClick={() => onAccept(bet.id)}
+                disabled={!!pendingAction}
               >
-                Accept Bet
+                {pendingAction === `accept:${bet.id}` ? "Confirming..." : "Accept Bet"}
               </button>
             )}
 
@@ -189,8 +197,9 @@ function BetCard({ bet, account, friends, onAccept, onSettle }) {
               <button
                 className="btn btn-sage btn-sm"
                 onClick={() => onSettle(bet.id, account)}
+                disabled={!!pendingAction}
               >
-                I Won
+                {pendingAction === `settle:${bet.id}` ? "Confirming..." : "I Won"}
               </button>
             )}
             {bet.status === "active" && (
@@ -202,8 +211,9 @@ function BetCard({ bet, account, friends, onAccept, onSettle }) {
                     isMine ? bet.against : bet.creator
                   )
                 }
+                disabled={!!pendingAction}
               >
-                They Won
+                {pendingAction === `settle:${bet.id}` ? "Confirming..." : "They Won"}
               </button>
             )}
           </div>
@@ -225,6 +235,16 @@ function BetCard({ bet, account, friends, onAccept, onSettle }) {
   );
 }
 
+function TxHash({ label, hash }) {
+  if (!hash) return null;
+
+  return (
+    <div className="bet-tx">
+      {label}: {hash.slice(0, 10)}...{hash.slice(-6)}
+    </div>
+  );
+}
+
 // ─── Bets Page ────────────────────────────────────────────────────────────────
 export default function BetsPage({
   state,
@@ -235,6 +255,7 @@ export default function BetsPage({
 }) {
   const [filter,    setFilter]    = useState("active");
   const [showModal, setShowModal] = useState(!!preGoalId);
+  const [pendingAction, setPendingAction] = useState("");
 
   const FILTERS = [
     ["active",         "Active"],
@@ -248,9 +269,24 @@ export default function BetsPage({
       ? state.bets
       : state.bets.filter((b) => b.status === filter);
 
+  const incomingPending = state.bets.filter(
+    (b) => b.status === "pending_accept" && b.against === state.account
+  );
+
+  const transactions = [...(state.transactions || [])].sort(
+    (a, b) => b.createdAt - a.createdAt
+  );
+  const gained = transactions
+    .filter((tx) => tx.amount > 0)
+    .reduce((sum, tx) => sum + tx.amount, 0);
+  const lost = transactions
+    .filter((tx) => tx.amount < 0)
+    .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+  const net = transactions.reduce((sum, tx) => sum + tx.amount, 0);
+
   const totalStaked = state.bets
     .filter((b) => b.status !== "settled")
-    .reduce((s, b) => s + parseFloat(b.amount || 0), 0)
+    .reduce((s, b) => s + money(b.amount), 0)
     .toFixed(2);
 
   return (
@@ -274,16 +310,63 @@ export default function BetsPage({
           <div className="stat-lbl">Pending</div>
         </div>
         <div className="stat-box">
-          <div className="stat-num sage">
-            {state.bets.filter((b) => b.status === "settled").length}
+          <div className={`stat-num ${net < 0 ? "rose" : "sage"}`}>
+            {net.toFixed(2)}
           </div>
-          <div className="stat-lbl">Settled</div>
+          <div className="stat-lbl">Net P/L</div>
         </div>
         <div className="stat-box">
           <div className="stat-num">{totalStaked}</div>
           <div className="stat-lbl">MON at stake</div>
         </div>
       </div>
+
+      <div className="stats-row">
+        <div className="stat-box">
+          <div className="stat-num sage">{gained.toFixed(2)}</div>
+          <div className="stat-lbl">Gained MON</div>
+        </div>
+        <div className="stat-box">
+          <div className="stat-num rose">{lost.toFixed(2)}</div>
+          <div className="stat-lbl">Lost / Locked MON</div>
+        </div>
+        <div className="stat-box">
+          <div className="stat-num sage">
+            {state.bets.filter((b) => b.status === "settled").length}
+          </div>
+          <div className="stat-lbl">Settled</div>
+        </div>
+      </div>
+
+      {incomingPending.length > 0 && (
+        <>
+          <div className="section-head">
+            <div className="section-label">Pending for you</div>
+            <span className="section-count">{incomingPending.length} waiting</span>
+          </div>
+          <div className="card-list" style={{ marginBottom: 24 }}>
+            {incomingPending.map((b) => (
+              <BetCard
+                key={b.id}
+                bet={b}
+                account={state.account}
+                friends={state.friends}
+                pendingAction={pendingAction}
+                onAccept={async (betId) => {
+                  setPendingAction(`accept:${betId}`);
+                  await acceptBet(betId);
+                  setPendingAction("");
+                }}
+                onSettle={async (betId, winner) => {
+                  setPendingAction(`settle:${betId}`);
+                  await settleBet(betId, winner);
+                  setPendingAction("");
+                }}
+              />
+            ))}
+          </div>
+        </>
+      )}
 
       {/* ── Filter tabs + CTA ── */}
       <div
@@ -327,8 +410,17 @@ export default function BetsPage({
               bet={b}
               account={state.account}
               friends={state.friends}
-              onAccept={acceptBet}
-              onSettle={settleBet}
+              pendingAction={pendingAction}
+              onAccept={async (betId) => {
+                setPendingAction(`accept:${betId}`);
+                await acceptBet(betId);
+                setPendingAction("");
+              }}
+              onSettle={async (betId, winner) => {
+                setPendingAction(`settle:${betId}`);
+                await settleBet(betId, winner);
+                setPendingAction("");
+              }}
             />
           ))}
         </div>
@@ -340,11 +432,36 @@ export default function BetsPage({
           state={state}
           preGoalId={preGoalId}
           onClose={() => setShowModal(false)}
-          onCreate={(data) => {
-            createBet(data);
-            setShowModal(false);
-          }}
+          onCreate={createBet}
         />
+      )}
+
+      <hr className="divider" />
+      <div className="section-head">
+        <div className="section-label">Transaction History</div>
+        <span className="section-count">{transactions.length} records</span>
+      </div>
+      {transactions.length === 0 ? (
+        <div className="empty">
+          <div className="empty-icon">◇</div>
+          <div className="empty-text">No transaction records yet</div>
+        </div>
+      ) : (
+        <div className="history-list">
+          {transactions.map((tx) => (
+            <div className="history-row" key={tx.id}>
+              <div>
+                <div className="history-title">{tx.label}</div>
+                <div className="history-meta">
+                  {new Date(tx.createdAt).toLocaleString()} · {tx.hash.slice(0, 10)}...{tx.hash.slice(-6)}
+                </div>
+              </div>
+              <div className={`history-amount ${tx.amount < 0 ? "loss" : "gain"}`}>
+                {signedMon(tx.amount)}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
