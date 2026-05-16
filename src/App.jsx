@@ -59,14 +59,21 @@ function Sidebar({ page, setPage, state, walletAddress, onWalletClick }) {
 
       <button className="sidebar-wallet" onClick={onWalletClick}>
         <span className="wallet-dot" />
-        {walletAddress ? short(walletAddress) : "Connect Wallet"}
+        {walletAddress
+          ? short(walletAddress)
+          : isAddress(state.account)
+          ? `Test ${short(state.account)}`
+          : "Connect Wallet"}
       </button>
     </aside>
   );
 }
 
 // ─── Wallet Modal ────────────────────────────────────────────────────────────
-function WalletModal({ account, onClose, onConnect, onSwitch }) {
+function WalletModal({ account, activeAccount, onClose, onConnect, onSwitch, onDisconnect, onUseTestUser }) {
+  const [testAddress, setTestAddress] = useState("");
+  const canUseTestUser = isAddress(testAddress);
+
   return (
     <Modal
       title="Connect to wallet"
@@ -77,11 +84,16 @@ function WalletModal({ account, onClose, onConnect, onSwitch }) {
             Cancel
           </button>
           {account && (
-            <button className="btn btn-amber" onClick={onSwitch}>
-              Switch Wallet
-            </button>
+            <>
+              <button className="btn btn-ghost" onClick={onDisconnect}>
+                Disconnect
+              </button>
+              <button className="btn btn-amber" onClick={onSwitch}>
+                Switch Wallet
+              </button>
+            </>
           )}
-          <button className="btn btn-ink" onClick={() => onConnect()}>
+          <button className="btn btn-ink" onClick={() => onConnect(true)}>
             Connect MetaMask
           </button>
         </>
@@ -94,8 +106,32 @@ function WalletModal({ account, onClose, onConnect, onSwitch }) {
           <div className="wallet-connect-copy">
             {account
               ? `Active user: ${short(account)}`
+              : activeAccount && isAddress(activeAccount)
+              ? `Local test user: ${short(activeAccount)}`
               : "Connect any wallet to use GoalPool as that user."}
           </div>
+        </div>
+      </div>
+
+      <div className="wallet-test-box">
+        <label className="label">Use address for local testing</label>
+        <div className="wallet-test-row">
+          <input
+            className="input"
+            placeholder="Friend's 0x wallet address"
+            value={testAddress}
+            onChange={(e) => setTestAddress(e.target.value)}
+          />
+          <button
+            className="btn btn-ghost"
+            disabled={!canUseTestUser}
+            onClick={() => onUseTestUser(testAddress)}
+          >
+            Use
+          </button>
+        </div>
+        <div className="field-hint">
+          This changes the app user for local testing. Real transactions still need MetaMask switched to the same wallet.
         </div>
       </div>
     </Modal>
@@ -327,6 +363,14 @@ export default function App() {
           ? g
           : { ...g, members: [...g.members, account] }
       );
+      return s;
+    });
+  }
+
+  function clearWalletAccount() {
+    setWalletAddress("");
+    update((s) => {
+      s.account = INITIAL_STATE.account;
       return s;
     });
   }
@@ -607,6 +651,28 @@ export default function App() {
     }
   }
 
+  async function disconnectWallet() {
+    try {
+      await window.ethereum?.request?.({
+        method: "wallet_revokePermissions",
+        params: [{ eth_accounts: {} }],
+      });
+    } catch (error) {
+      console.info("MetaMask permission revoke unavailable or cancelled:", error);
+    }
+
+    clearWalletAccount();
+    setShowWallet(false);
+    push("Wallet disconnected", "success");
+  }
+
+  function useTestUser(address) {
+    activateWalletAccount(address);
+    setWalletAddress("");
+    setShowWallet(false);
+    push(`Local test user set to ${short(address)}`, "success");
+  }
+
   async function ensureMonadTestnet() {
     try {
       await window.ethereum.request({
@@ -630,6 +696,11 @@ export default function App() {
     const [account] = await window.ethereum.request({
       method: "eth_requestAccounts",
     });
+
+    if (isAddress(state.account) && state.account.toLowerCase() !== account.toLowerCase()) {
+      throw new Error(`MetaMask is connected to ${short(account)}. Switch MetaMask to ${short(state.account)} first.`);
+    }
+
     activateWalletAccount(account);
     await ensureMonadTestnet();
 
@@ -706,9 +777,12 @@ export default function App() {
       {showWallet && (
         <WalletModal
           account={walletAddress}
+          activeAccount={state.account}
           onClose={() => setShowWallet(false)}
           onConnect={connectWallet}
           onSwitch={() => connectWallet(true)}
+          onDisconnect={disconnectWallet}
+          onUseTestUser={useTestUser}
         />
       )}
 

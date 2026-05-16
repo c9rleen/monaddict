@@ -266,6 +266,19 @@ body::after {
   font-family: var(--font-mono); font-size: 12px;
   color: var(--muted); margin-top: 4px;
 }
+.wallet-test-box {
+  margin-top: 18px;
+  background: var(--cream);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 14px;
+}
+.wallet-test-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.wallet-test-row .input { flex: 1; }
 
 /* ── Form ── */
 .field { margin-bottom: 18px; }
