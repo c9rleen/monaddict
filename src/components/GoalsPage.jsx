@@ -3,7 +3,7 @@
 // Wire addGoal / markComplete / verifyGoal to contract calls when ready.
 
 import { useState } from "react";
-import { ensName, DeadlineChip, Modal } from "./constants.js";
+import { ensName, DeadlineChip, Modal } from "../Constants.jsx";
 
 // ─── Add Goal Modal ───────────────────────────────────────────────────────────
 function AddGoalModal({ onClose, onAdd, groups }) {

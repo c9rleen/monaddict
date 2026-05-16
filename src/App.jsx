@@ -4,11 +4,11 @@
 
 import { useState, useCallback } from "react";
 import { CSS }          from "./styles.js";
-import { INITIAL_STATE, short, ensName, DeadlineChip } from "./constants.js";
-import FriendsPage from "./FriendsPage.jsx";
-import GroupsPage  from "./GroupsPage.jsx";
-import GoalsPage   from "./GoalsPage.jsx";
-import BetsPage    from "./BetsPage.jsx";
+import { INITIAL_STATE, short, ensName, DeadlineChip } from "./Constants.jsx";
+import FriendsPage from "./components/FriendsPage.jsx";
+import GroupsPage  from "./components/CreateGroup.jsx";
+import GoalsPage   from "./components/GoalsPage.jsx";
+import BetsPage    from "./components/BetsPage.jsx";
 
 // ─── Toast hook ───────────────────────────────────────────────────────────────
 function useToast() {

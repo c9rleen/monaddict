@@ -3,7 +3,7 @@
 // Wire createGroup to contract.createGroup(...) when ready.
 
 import { useState } from "react";
-import { initial, Modal } from "./constants.js";
+import { initial, Modal } from "../Constants.jsx";
 
 // ─── Create Group Modal ───────────────────────────────────────────────────────
 function CreateGroupModal({ onClose, onCreate }) {
